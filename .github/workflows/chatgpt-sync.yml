@@ -1,3 +1,17 @@
+name: Sync ChatGPT Notes to Obsidian
+
+on:
+  schedule:
+    - cron: '0 * * * *'  # Runs every hour (change if needed)
+  workflow_dispatch:  # Allows manual triggering
+
+jobs:
+  sync_notes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
       - name: Fetch new notes from ChatGPT
         run: |
           mkdir -p chatgpt-notes  # Ensure the folder exists
@@ -12,3 +26,12 @@
             }' | jq -r '.choices[0].text')
 
           echo "$RESPONSE" > "chatgpt-notes/note-$(date +%Y-%m-%d_%H-%M).md"
+
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "actions@github.com"
+          git add .
+          git commit -m "New ChatGPT note - $(date)"
+          git push
+
