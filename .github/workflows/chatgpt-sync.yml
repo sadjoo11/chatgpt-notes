@@ -7,34 +7,47 @@ on:
 
 jobs:
   sync_notes:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
       - name: Fetch new notes from ChatGPT
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          mkdir -p chatgpt-notes  # Ensure the folder exists
-          
-          RESPONSE=$(curl -s -X POST "https://api.openai.com/v1/completions" \
-            -H "Authorization: Bearer ${{ secrets.OPENAI_API_KEY }}" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "model": "gpt-4",
-              "prompt": "Write a short note about artificial intelligence.",
-              "max_tokens": 200
-            }' | jq -r '.choices[0].text')
+          # Ensure the chatgpt-notes directory exists
+          if (!(Test-Path -Path "chatgpt-notes")) {
+            New-Item -ItemType Directory -Path "chatgpt-notes"
+          }
 
-          echo "$RESPONSE" > "chatgpt-notes/note-$(date +%Y-%m-%d_%H-%M).md"
+          # Call OpenAI API to fetch a new note
+          $headers = @{
+            "Authorization" = "Bearer $env:OPENAI_API_KEY"
+            "Content-Type"  = "application/json"
+          }
 
-           - name: Commit and Push Changes
+          $body = @{
+            model     = "gpt-4"
+            prompt    = "Write a short note about artificial intelligence."
+            max_tokens = 200
+          } | ConvertTo-Json -Depth 10
+
+          $response = Invoke-RestMethod -Uri "https://api.openai.com/v1/completions" -Method Post -Headers $headers -Body $body
+
+          # Extract text and save to a Markdown file
+          $noteContent = $response.choices[0].text
+          $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm"
+          $filePath = "chatgpt-notes\note-$timestamp.md"
+
+          Set-Content -Path $filePath -Value $noteContent -Encoding UTF8
+
+      - name: Commit and Push Changes
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "actions@github.com"
           git add .
-          git commit -m "New ChatGPT note - $(date)"
-          git push https://$GH_PAT@github.com/sadjoo11/chatgpt-notes.git
-
-
+          git commit -m "New ChatGPT note - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+          git push https://$env:GH_PAT@github.com/sadjoo11/chatgpt-notes.git
